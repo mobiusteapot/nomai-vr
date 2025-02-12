@@ -31,6 +31,7 @@ namespace Valve.VR
         [DidReloadScripts]
         private static void OnReload()
         {
+            Debug.Log("DID RELOAD");
             SteamVR_AutoEnableVR_UnityPackage.InstallAndEnableUnityVR();
         }
     }
@@ -270,6 +271,12 @@ namespace Valve.VR
                     break;
 
                 case PackageStates.WaitingForAddConfirm:
+                    if(listRequest == null)
+                    {
+                        updateState = PackageStates.None;
+                        return;
+                        //updateState = PackageStates.WaitingForList;
+                    }
                     if (listRequest.IsCompleted)
                     {
                         if (listRequest.Error != null)
