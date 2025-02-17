@@ -23,6 +23,17 @@ namespace NomaiVR.Player
             private static Autopilot autopilot;
             private readonly SteamVR_Action_Boolean recenterAction = SteamVR_Actions._default.Recenter;
 
+            private static readonly SteamVR_Action_Vector2 turnAction = SteamVR_Actions._default.Look;
+            private float turnCooldown = 0.05f;
+            private float lastTurnTime;
+
+            private static float snapTurnInputThreshold = 0.15f;
+            // For testing. Need to move this to the settings menu.
+
+            private static bool snapTurnEnabled = false;
+            private static bool isTurnInCooldown = false;
+            private static float snapTurnIncrement = 90f;
+
             internal void Start()
             {
                 // This component is messing with our ability to read the VR camera's rotation.
@@ -95,12 +106,29 @@ namespace NomaiVR.Player
                 }
                 
                 UpdateRecenter();
+
+                if(!snapTurnEnabled)
+                {
+                    return;
+                }
+                if(Mathf.Abs(turnAction.axis.x) < snapTurnInputThreshold)
+                {
+                    Logs.Write("Should be able to snap turn again!", debugOnly: false);
+                }
+                // Check if time has passed and input stick was returned to neutral
+                if(isTurnInCooldown && Time.time - lastTurnTime > turnCooldown && Mathf.Abs(turnAction.axis.x) < snapTurnInputThreshold)
+                {
+                    Logs.Write("Snap turn cooldown over!", debugOnly: false);
+                    isTurnInCooldown = false;
+                    lastTurnTime = Time.time;
+                }
             }
 
             public class Patch : NomaiVRPatch
             {
                 public override void ApplyPatches()
                 {
+                    Postfix<OWInput>(nameof(OWInput.GetAxisValue), nameof(PostGetAxisValue));
                     Postfix<PlayerCharacterController>(nameof(PlayerCharacterController.UpdateTurning), nameof(PostCharacterTurning));
                     Postfix<JetpackThrusterController>(nameof(JetpackThrusterController.FixedUpdate), nameof(PostThrusterUpdate));
                     Prefix<OWCamera>("set_" + nameof(OWCamera.fieldOfView), nameof(PatchOwCameraFOV));
@@ -131,42 +159,76 @@ namespace NomaiVR.Player
                     var isStoppedOnGround = playerController.IsGrounded() && (runSpeedX + runSpeedY == 0);
                     var isControllerOriented = !(isStoppedOnGround) && ModSettings.ControllerOrientedMovement;
 
-                    if ((OWInput.GetInputMode() != InputMode.Character))
+                    if((OWInput.GetInputMode() != InputMode.Character))
                     {
                         return;
                     }
 
 
-                    var rotationSource = isControllerOriented ? LaserPointer.Behaviour.MovementLaser : playerCamera.transform;
-
-                    var fromTo = Quaternion.FromToRotation(playerBody.transform.forward, Vector3.ProjectOnPlane(rotationSource.transform.forward, playerBody.transform.up));
-
-                    var magnitude = 0f;
-                    if (!isControllerOriented)
+                    if(!snapTurnEnabled)
                     {
-                        var magnitudeUp = 1 - Vector3.ProjectOnPlane(rotationSource.transform.up, playerBody.transform.up).magnitude;
-                        var magnitudeForward = 1 - Vector3.ProjectOnPlane(rotationSource.transform.up, playerBody.transform.right).magnitude;
-                        magnitude = magnitudeUp + magnitudeForward;
 
-                        if (magnitude < 0.3f)
+                        var rotationSource = isControllerOriented ? LaserPointer.Behaviour.MovementLaser : playerCamera.transform;
+                        var magnitude = 0f;
+                        if(!isControllerOriented)
                         {
-                            return;
+                            var magnitudeUp = 1 - Vector3.ProjectOnPlane(rotationSource.transform.up, playerBody.transform.up).magnitude;
+                            var magnitudeForward = 1 - Vector3.ProjectOnPlane(rotationSource.transform.up, playerBody.transform.right).magnitude;
+                            magnitude = magnitudeUp + magnitudeForward;
+
+                            if(magnitude < 0.3f)
+                            {
+                                return;
+                            }
                         }
-                    }
 
-                    var targetRotation = fromTo * playerBody.transform.rotation;
-                    var inverseRotation = Quaternion.Inverse(fromTo) * playArea.rotation;
+                        var fromTo = Quaternion.FromToRotation(playerBody.transform.forward, Vector3.ProjectOnPlane(rotationSource.transform.forward, playerBody.transform.up));
+                        var targetRotation = fromTo * playerBody.transform.rotation;
+                        var inverseRotation = Quaternion.Inverse(fromTo) * playArea.rotation;
 
-                    if (isControllerOriented)
-                    {
-                        playArea.rotation = inverseRotation;
-                        rotationSetter(targetRotation);
+                        if(isControllerOriented)
+                        {
+                            playArea.rotation = inverseRotation;
+                            rotationSetter(targetRotation);
+                        }
+                        else
+                        {
+                            var maxDegreesDelta = magnitude * 3f;
+                            playArea.rotation = Quaternion.RotateTowards(playArea.rotation, inverseRotation, maxDegreesDelta);
+                            rotationSetter(Quaternion.RotateTowards(playerBody.transform.rotation, targetRotation, maxDegreesDelta));
+                        }
                     }
                     else
                     {
-                        var maxDegreesDelta = magnitude * 3f;
-                        playArea.rotation = Quaternion.RotateTowards(playArea.rotation, inverseRotation, maxDegreesDelta);
-                        rotationSetter(Quaternion.RotateTowards(playerBody.transform.rotation, targetRotation, maxDegreesDelta));
+
+                        float turnInput = turnAction.axis.x;
+                        if(!isTurnInCooldown && Mathf.Abs(turnInput) > snapTurnInputThreshold)
+                        {
+                            isTurnInCooldown = true;
+                            float sign = Mathf.Sign(turnInput);
+                            Quaternion snapRotation = Quaternion.AngleAxis(snapTurnIncrement * sign, playerBody.transform.up);
+                            var fromTo = Quaternion.FromToRotation(playerBody.transform.forward, snapRotation * playerBody.transform.forward);
+                            var targetRotation = fromTo * playerBody.transform.rotation;
+                            var inverseRotation = Quaternion.Inverse(fromTo) * playArea.rotation;
+
+                            //playArea.rotation = inverseRotation;
+                            rotationSetter(targetRotation);
+                        }
+
+                    }
+                }
+
+                // Override vanilla input handling for turning (if snap turn is enabled)
+                private static void PostGetAxisValue(ref Vector2 __result, IInputCommands command, InputMode mask)
+                {
+                    if(!snapTurnEnabled || (OWInput.GetInputMode() != InputMode.Character))
+                    {
+                        return;
+                    }
+                    // If the command is for turning, set the axis value to zero
+                    if(command.CommandType == InputConsts.InputCommandType.LOOK)
+                    {
+                        __result = Vector2.zero;
                     }
                 }
 
