@@ -22,17 +22,10 @@ namespace NomaiVR.Player
             private static PlayerCharacterController playerController;
             private static Autopilot autopilot;
             private readonly SteamVR_Action_Boolean recenterAction = SteamVR_Actions._default.Recenter;
-
             private static readonly SteamVR_Action_Vector2 turnAction = SteamVR_Actions._default.Look;
-            private float turnCooldown = 0.05f;
+            private static readonly float snapTurnInputThreshold = 0.15f;
+            private static bool isSnapTurnInCooldown = false;
             private float lastTurnTime;
-
-            private static float snapTurnInputThreshold = 0.15f;
-            // For testing. Need to move this to the settings menu.
-
-            private static bool snapTurnEnabled = false;
-            private static bool isTurnInCooldown = false;
-            private static float snapTurnIncrement = 90f;
 
             internal void Start()
             {
@@ -107,20 +100,14 @@ namespace NomaiVR.Player
                 
                 UpdateRecenter();
 
-                if(!snapTurnEnabled)
+                if(ModSettings.SnapTurning)
                 {
-                    return;
-                }
-                if(Mathf.Abs(turnAction.axis.x) < snapTurnInputThreshold)
-                {
-                    Logs.Write("Should be able to snap turn again!", debugOnly: false);
-                }
-                // Check if time has passed and input stick was returned to neutral
-                if(isTurnInCooldown && Time.time - lastTurnTime > turnCooldown && Mathf.Abs(turnAction.axis.x) < snapTurnInputThreshold)
-                {
-                    Logs.Write("Snap turn cooldown over!", debugOnly: false);
-                    isTurnInCooldown = false;
-                    lastTurnTime = Time.time;
+                    // Check if time has passed and input stick was returned to neutral
+                    if(isSnapTurnInCooldown && Time.time - lastTurnTime > 0.05f && Mathf.Abs(turnAction.axis.x) < snapTurnInputThreshold)
+                    {
+                        isSnapTurnInCooldown = false;
+                        lastTurnTime = Time.time;
+                    }
                 }
             }
 
@@ -164,68 +151,61 @@ namespace NomaiVR.Player
                         return;
                     }
 
-
-                    if(!snapTurnEnabled)
+                    if(ModSettings.SnapTurning)
                     {
-
-                        var rotationSource = isControllerOriented ? LaserPointer.Behaviour.MovementLaser : playerCamera.transform;
-                        var magnitude = 0f;
-                        if(!isControllerOriented)
+                        float turnInput = turnAction.axis.x;
+                        // If snap turning, only do the snap turn, skip reorienting the play area
+                        if(!isSnapTurnInCooldown && Mathf.Abs(turnInput) > snapTurnInputThreshold)
                         {
-                            var magnitudeUp = 1 - Vector3.ProjectOnPlane(rotationSource.transform.up, playerBody.transform.up).magnitude;
-                            var magnitudeForward = 1 - Vector3.ProjectOnPlane(rotationSource.transform.up, playerBody.transform.right).magnitude;
-                            magnitude = magnitudeUp + magnitudeForward;
+                            isSnapTurnInCooldown = true;
+                            float sign = Mathf.Sign(turnInput);
+                            Quaternion snapRotation = Quaternion.AngleAxis(ModSettings.SnapTurnIncrement * sign, playerBody.transform.up);
+                            var fromToSnap = Quaternion.FromToRotation(playerBody.transform.forward, snapRotation * playerBody.transform.forward);
 
-                            if(magnitude < 0.3f)
-                            {
-                                return;
-                            }
+                            rotationSetter(fromToSnap * playerBody.transform.rotation);
+                            return;
                         }
+                    }
 
-                        var fromTo = Quaternion.FromToRotation(playerBody.transform.forward, Vector3.ProjectOnPlane(rotationSource.transform.forward, playerBody.transform.up));
-                        var targetRotation = fromTo * playerBody.transform.rotation;
-                        var inverseRotation = Quaternion.Inverse(fromTo) * playArea.rotation;
+                    var rotationSource = isControllerOriented ? LaserPointer.Behaviour.MovementLaser : playerCamera.transform;
+                    var magnitude = 0f;
+                    if(!isControllerOriented)
+                    {
+                        var magnitudeUp = 1 - Vector3.ProjectOnPlane(rotationSource.transform.up, playerBody.transform.up).magnitude;
+                        var magnitudeForward = 1 - Vector3.ProjectOnPlane(rotationSource.transform.up, playerBody.transform.right).magnitude;
+                        magnitude = magnitudeUp + magnitudeForward;
 
-                        if(isControllerOriented)
+                        if(magnitude < 0.3f)
                         {
-                            playArea.rotation = inverseRotation;
-                            rotationSetter(targetRotation);
+                            return;
                         }
-                        else
-                        {
-                            var maxDegreesDelta = magnitude * 3f;
-                            playArea.rotation = Quaternion.RotateTowards(playArea.rotation, inverseRotation, maxDegreesDelta);
-                            rotationSetter(Quaternion.RotateTowards(playerBody.transform.rotation, targetRotation, maxDegreesDelta));
-                        }
+                    }
+
+                    var fromTo = Quaternion.FromToRotation(playerBody.transform.forward, Vector3.ProjectOnPlane(rotationSource.transform.forward, playerBody.transform.up));
+                    var targetRotation = fromTo * playerBody.transform.rotation;
+                    var inverseRotation = Quaternion.Inverse(fromTo) * playArea.rotation;
+
+                    if(isControllerOriented)
+                    {
+                        playArea.rotation = inverseRotation;
+                        rotationSetter(targetRotation);
                     }
                     else
                     {
-
-                        float turnInput = turnAction.axis.x;
-                        if(!isTurnInCooldown && Mathf.Abs(turnInput) > snapTurnInputThreshold)
-                        {
-                            isTurnInCooldown = true;
-                            float sign = Mathf.Sign(turnInput);
-                            Quaternion snapRotation = Quaternion.AngleAxis(snapTurnIncrement * sign, playerBody.transform.up);
-                            var fromTo = Quaternion.FromToRotation(playerBody.transform.forward, snapRotation * playerBody.transform.forward);
-                            var targetRotation = fromTo * playerBody.transform.rotation;
-                            var inverseRotation = Quaternion.Inverse(fromTo) * playArea.rotation;
-
-                            //playArea.rotation = inverseRotation;
-                            rotationSetter(targetRotation);
-                        }
-
+                        var maxDegreesDelta = magnitude * 3f;
+                        playArea.rotation = Quaternion.RotateTowards(playArea.rotation, inverseRotation, maxDegreesDelta);
+                        rotationSetter(Quaternion.RotateTowards(playerBody.transform.rotation, targetRotation, maxDegreesDelta));
                     }
                 }
 
-                // Override vanilla input handling for turning (if snap turn is enabled)
+                // Override vanilla input handling for disabling turning while snap turning is enabled
                 private static void PostGetAxisValue(ref Vector2 __result, IInputCommands command, InputMode mask)
                 {
-                    if(!snapTurnEnabled || (OWInput.GetInputMode() != InputMode.Character))
+                    if(!ModSettings.SnapTurning || (OWInput.GetInputMode() != InputMode.Character))
                     {
                         return;
                     }
-                    // If the command is for turning, set the axis value to zero
+
                     if(command.CommandType == InputConsts.InputCommandType.LOOK)
                     {
                         __result = Vector2.zero;
