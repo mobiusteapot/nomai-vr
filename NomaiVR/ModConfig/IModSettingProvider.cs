@@ -18,7 +18,7 @@ namespace NomaiVR.ModConfig
         bool FlashlightGesture { get; }
         bool ControllerOrientedMovement { get; }
         bool SnapTurning { get; }
-        float SnapTurnIncrement { get; }
+        string SnapTurnIncrement { get; }
         bool AutoHideToolbelt { get; }
         float ToolbeltHeight { get; }
         float HudScale { get; }

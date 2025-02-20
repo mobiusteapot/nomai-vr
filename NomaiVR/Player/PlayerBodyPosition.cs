@@ -159,7 +159,7 @@ namespace NomaiVR.Player
                         {
                             isSnapTurnInCooldown = true;
                             float sign = Mathf.Sign(turnInput);
-                            Quaternion snapRotation = Quaternion.AngleAxis(ModSettings.SnapTurnIncrement * sign, playerBody.transform.up);
+                            Quaternion snapRotation = Quaternion.AngleAxis(GetSnapTurnIncrement() * sign, playerBody.transform.up);
                             var fromToSnap = Quaternion.FromToRotation(playerBody.transform.forward, snapRotation * playerBody.transform.forward);
 
                             rotationSetter(fromToSnap * playerBody.transform.rotation);
@@ -224,6 +224,25 @@ namespace NomaiVR.Player
                     //Returns FOV scaled by scale factor
                     if (__instance.mainCamera.stereoEnabled) __result = CameraHelper.GetScaledFieldOfView(__instance.mainCamera);
                     return !__instance.mainCamera.stereoEnabled;
+                }
+
+                private static float GetSnapTurnIncrement()
+                {
+                    switch(ModSettings.SnapTurnIncrement)
+                    {
+                        case "15":
+                            return 15f;
+                        case "30":
+                            return 30f;
+                        case "45":
+                            return 45f;
+                        case "60":
+                            return 60f;
+                        case "90":
+                            return 90f;
+                        default:
+                            return 45f;
+                    }
                 }
             }
 
