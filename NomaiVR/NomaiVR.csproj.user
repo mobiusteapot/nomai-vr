@@ -3,7 +3,7 @@
   <PropertyGroup>
     <ProjectView>ProjectFiles</ProjectView>
     <GameDir>E:\SteamLibrary\steamapps\common\Outer Wilds</GameDir>
-    <OwmlDir>C:\Users\ez900\AppData\Roaming\OuterWildsModManager\OWML</OwmlDir>
+    <OwmlDir>C:\Users\ez900\AppData\Roaming\OuterWildsModManager\OWML\Mods</OwmlDir>
     <UnityEditor>C:\Program Files\Unity\2019.4.27f1\Editor\Unity.exe</UnityEditor>
     <ModDir>NomaiVR</ModDir>
   </PropertyGroup>
