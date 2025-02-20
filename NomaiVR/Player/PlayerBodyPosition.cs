@@ -100,10 +100,10 @@ namespace NomaiVR.Player
                 
                 UpdateRecenter();
 
-                if(ModSettings.SnapTurning)
+                if (ModSettings.SnapTurning)
                 {
                     // Check if time has passed and input stick was returned to neutral
-                    if(isSnapTurnInCooldown && Time.time - lastTurnTime > 0.05f && Mathf.Abs(turnAction.axis.x) < snapTurnInputThreshold)
+                    if (isSnapTurnInCooldown && Time.time - lastTurnTime > 0.05f && Mathf.Abs(turnAction.axis.x) < snapTurnInputThreshold)
                     {
                         isSnapTurnInCooldown = false;
                         lastTurnTime = Time.time;
@@ -146,16 +146,16 @@ namespace NomaiVR.Player
                     var isStoppedOnGround = playerController.IsGrounded() && (runSpeedX + runSpeedY == 0);
                     var isControllerOriented = !(isStoppedOnGround) && ModSettings.ControllerOrientedMovement;
 
-                    if((OWInput.GetInputMode() != InputMode.Character))
+                    if ((OWInput.GetInputMode() != InputMode.Character))
                     {
                         return;
                     }
 
-                    if(ModSettings.SnapTurning)
+                    if (ModSettings.SnapTurning)
                     {
                         float turnInput = turnAction.axis.x;
                         // If snap turning, only do the snap turn, skip reorienting the play area
-                        if(!isSnapTurnInCooldown && Mathf.Abs(turnInput) > snapTurnInputThreshold)
+                        if (!isSnapTurnInCooldown && Mathf.Abs(turnInput) > snapTurnInputThreshold)
                         {
                             isSnapTurnInCooldown = true;
                             float sign = Mathf.Sign(turnInput);
@@ -169,13 +169,13 @@ namespace NomaiVR.Player
 
                     var rotationSource = isControllerOriented ? LaserPointer.Behaviour.MovementLaser : playerCamera.transform;
                     var magnitude = 0f;
-                    if(!isControllerOriented)
+                    if (!isControllerOriented)
                     {
                         var magnitudeUp = 1 - Vector3.ProjectOnPlane(rotationSource.transform.up, playerBody.transform.up).magnitude;
                         var magnitudeForward = 1 - Vector3.ProjectOnPlane(rotationSource.transform.up, playerBody.transform.right).magnitude;
                         magnitude = magnitudeUp + magnitudeForward;
 
-                        if(magnitude < 0.3f)
+                        if (magnitude < 0.3f)
                         {
                             return;
                         }
@@ -185,7 +185,7 @@ namespace NomaiVR.Player
                     var targetRotation = fromTo * playerBody.transform.rotation;
                     var inverseRotation = Quaternion.Inverse(fromTo) * playArea.rotation;
 
-                    if(isControllerOriented)
+                    if (isControllerOriented)
                     {
                         playArea.rotation = inverseRotation;
                         rotationSetter(targetRotation);
@@ -201,12 +201,12 @@ namespace NomaiVR.Player
                 // Override vanilla input handling for disabling turning while snap turning is enabled
                 private static void PostGetAxisValue(ref Vector2 __result, IInputCommands command, InputMode mask)
                 {
-                    if(!ModSettings.SnapTurning || (OWInput.GetInputMode() != InputMode.Character))
+                    if (!ModSettings.SnapTurning || (OWInput.GetInputMode() != InputMode.Character))
                     {
                         return;
                     }
 
-                    if(command.CommandType == InputConsts.InputCommandType.LOOK)
+                    if (command.CommandType == InputConsts.InputCommandType.LOOK)
                     {
                         __result = Vector2.zero;
                     }
