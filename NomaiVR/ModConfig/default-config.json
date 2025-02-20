@@ -86,10 +86,15 @@
       "no": "Disabled"
     },
     "snapTurnIncrement": {
-      "type": "slider",
-      "value": 45,
-      "min": 15,
-      "max": 90,
+      "type": "selector",
+      "value": "45",
+      "options": [
+        "15",
+        "30",
+        "45",
+        "60",
+        "90"
+      ],
       "title": "Snap turn increment"
     },
     "showGesturePrompts": {
