@@ -14,6 +14,8 @@ namespace NomaiVR.Player
 
         public class Behaviour : MonoBehaviour
         {
+            public static Action OnSnapTurn;
+
             private Transform cameraParent;
             private static Transform playArea;
             private static OWCamera playerCamera;
@@ -154,6 +156,7 @@ namespace NomaiVR.Player
                     if (ModSettings.SnapTurning)
                     {
                         float turnInput = turnAction.axis.x;
+
                         // If snap turning, only do the snap turn, skip reorienting the play area
                         if (!isSnapTurnInCooldown && Mathf.Abs(turnInput) > snapTurnInputThreshold)
                         {
@@ -163,6 +166,7 @@ namespace NomaiVR.Player
                             var fromToSnap = Quaternion.FromToRotation(playerBody.transform.forward, snapRotation * playerBody.transform.forward);
 
                             rotationSetter(fromToSnap * playerBody.transform.rotation);
+                            OnSnapTurn?.Invoke();
                             return;
                         }
                     }
