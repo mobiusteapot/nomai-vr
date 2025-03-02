@@ -153,7 +153,7 @@ namespace NomaiVR.Player
                         return;
                     }
 
-                    if (ModSettings.SnapTurning)
+                    if (ModSettings.SnapTurning && !PlayerState.InZeroG())
                     {
                         float turnInput = turnAction.axis.x;
 
