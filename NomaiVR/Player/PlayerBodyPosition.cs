@@ -14,6 +14,8 @@ namespace NomaiVR.Player
 
         public class Behaviour : MonoBehaviour
         {
+            public static Action OnSnapTurn;
+
             private Transform cameraParent;
             private static Transform playArea;
             private static OWCamera playerCamera;
@@ -22,6 +24,10 @@ namespace NomaiVR.Player
             private static PlayerCharacterController playerController;
             private static Autopilot autopilot;
             private readonly SteamVR_Action_Boolean recenterAction = SteamVR_Actions._default.Recenter;
+            private static readonly SteamVR_Action_Vector2 turnAction = SteamVR_Actions._default.Look;
+            private static readonly float snapTurnInputThreshold = 0.15f;
+            private static bool isSnapTurnInCooldown = false;
+            private float lastTurnTime;
 
             internal void Start()
             {
@@ -95,12 +101,23 @@ namespace NomaiVR.Player
                 }
                 
                 UpdateRecenter();
+
+                if (ModSettings.SnapTurning)
+                {
+                    // Check if time has passed and input stick was returned to neutral
+                    if (isSnapTurnInCooldown && Time.time - lastTurnTime > 0.05f && Mathf.Abs(turnAction.axis.x) < snapTurnInputThreshold)
+                    {
+                        isSnapTurnInCooldown = false;
+                        lastTurnTime = Time.time;
+                    }
+                }
             }
 
             public class Patch : NomaiVRPatch
             {
                 public override void ApplyPatches()
                 {
+                    Postfix<OWInput>(nameof(OWInput.GetAxisValue), nameof(PostGetAxisValue));
                     Postfix<PlayerCharacterController>(nameof(PlayerCharacterController.UpdateTurning), nameof(PostCharacterTurning));
                     Postfix<JetpackThrusterController>(nameof(JetpackThrusterController.FixedUpdate), nameof(PostThrusterUpdate));
                     Prefix<OWCamera>("set_" + nameof(OWCamera.fieldOfView), nameof(PatchOwCameraFOV));
@@ -136,11 +153,25 @@ namespace NomaiVR.Player
                         return;
                     }
 
+                    if (ModSettings.SnapTurning && !PlayerState.InZeroG())
+                    {
+                        float turnInput = turnAction.axis.x;
+
+                        // If snap turning, only do the snap turn, skip reorienting the play area
+                        if (!isSnapTurnInCooldown && Mathf.Abs(turnInput) > snapTurnInputThreshold)
+                        {
+                            isSnapTurnInCooldown = true;
+                            float sign = Mathf.Sign(turnInput);
+                            Quaternion snapRotation = Quaternion.AngleAxis(GetSnapTurnIncrement() * sign, playerBody.transform.up);
+                            var fromToSnap = Quaternion.FromToRotation(playerBody.transform.forward, snapRotation * playerBody.transform.forward);
+
+                            rotationSetter(fromToSnap * playerBody.transform.rotation);
+                            OnSnapTurn?.Invoke();
+                            return;
+                        }
+                    }
 
                     var rotationSource = isControllerOriented ? LaserPointer.Behaviour.MovementLaser : playerCamera.transform;
-
-                    var fromTo = Quaternion.FromToRotation(playerBody.transform.forward, Vector3.ProjectOnPlane(rotationSource.transform.forward, playerBody.transform.up));
-
                     var magnitude = 0f;
                     if (!isControllerOriented)
                     {
@@ -154,6 +185,7 @@ namespace NomaiVR.Player
                         }
                     }
 
+                    var fromTo = Quaternion.FromToRotation(playerBody.transform.forward, Vector3.ProjectOnPlane(rotationSource.transform.forward, playerBody.transform.up));
                     var targetRotation = fromTo * playerBody.transform.rotation;
                     var inverseRotation = Quaternion.Inverse(fromTo) * playArea.rotation;
 
@@ -170,6 +202,20 @@ namespace NomaiVR.Player
                     }
                 }
 
+                // Override vanilla input handling for disabling turning while snap turning is enabled
+                private static void PostGetAxisValue(ref Vector2 __result, IInputCommands command, InputMode mask)
+                {
+                    if (!ModSettings.SnapTurning || (OWInput.GetInputMode() != InputMode.Character))
+                    {
+                        return;
+                    }
+
+                    if (command.CommandType == InputConsts.InputCommandType.LOOK)
+                    {
+                        __result = Vector2.zero;
+                    }
+                }
+
                 private static bool PatchOwCameraFOV(OWCamera __instance)
                 {
                     //Prevents changing the fov of VR cameras
@@ -182,6 +228,25 @@ namespace NomaiVR.Player
                     //Returns FOV scaled by scale factor
                     if (__instance.mainCamera.stereoEnabled) __result = CameraHelper.GetScaledFieldOfView(__instance.mainCamera);
                     return !__instance.mainCamera.stereoEnabled;
+                }
+
+                private static float GetSnapTurnIncrement()
+                {
+                    switch(ModSettings.SnapTurnIncrement)
+                    {
+                        case "15":
+                            return 15f;
+                        case "30":
+                            return 30f;
+                        case "45":
+                            return 45f;
+                        case "60":
+                            return 60f;
+                        case "90":
+                            return 90f;
+                        default:
+                            return 45f;
+                    }
                 }
             }
 

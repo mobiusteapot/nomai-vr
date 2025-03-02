@@ -78,6 +78,25 @@
       "yes": "Controller",
       "no": "Head"
     },
+    "snapTurning": {
+      "type": "toggle",
+      "value": false,
+      "title": "Snap turning",
+      "yes": "Enabled",
+      "no": "Disabled"
+    },
+    "snapTurnIncrement": {
+      "type": "selector",
+      "value": "45",
+      "options": [
+        "15",
+        "30",
+        "45",
+        "60",
+        "90"
+      ],
+      "title": "Snap turn increment"
+    },
     "showGesturePrompts": {
       "type": "toggle",
       "value": true,

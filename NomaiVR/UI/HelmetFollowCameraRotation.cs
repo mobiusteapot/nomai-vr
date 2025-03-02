@@ -1,4 +1,5 @@
 ﻿using NomaiVR.ModConfig;
+using NomaiVR.Player;
 using UnityEngine;
 
 namespace NomaiVR.UI
@@ -8,19 +9,22 @@ namespace NomaiVR.UI
         private Quaternion lastFrameRotation;
         private const float speed = 0.5f;
         private bool smoothEnabled = true;
+        private bool snapEnabled = false;
+        private bool snapTurnedLastFrame = false;
 
         private void Start()
         {
             lastFrameRotation = transform.rotation;
 
-            SetSmoothEnabled();
+            RefreshEnabledSettings();
 
-            ModSettings.OnConfigChange += SetSmoothEnabled;
+            ModSettings.OnConfigChange += RefreshEnabledSettings;
         }
 
         private void OnDestroy()
         {
-            ModSettings.OnConfigChange -= SetSmoothEnabled;
+            ModSettings.OnConfigChange -= RefreshEnabledSettings;
+            PlayerBodyPosition.Behaviour.OnSnapTurn -= OnSnapTurn;
         }
 
         private void LateUpdate()
@@ -32,23 +36,41 @@ namespace NomaiVR.UI
 
             var targetRotation = Camera.main.transform.rotation;
 
-            if (smoothEnabled)
+            if (!smoothEnabled)
+            {
+                transform.rotation = targetRotation;
+            }
+            else if (snapEnabled && snapTurnedLastFrame)
+            {
+                snapTurnedLastFrame = false;
+                transform.rotation = targetRotation;
+            }
+            else
             {
                 var difference = Mathf.Abs(Quaternion.Angle(lastFrameRotation, targetRotation));
                 var step = speed * Time.unscaledDeltaTime * difference * difference;
                 transform.rotation = Quaternion.RotateTowards(lastFrameRotation, targetRotation, step);
             }
-            else
-            {
-                transform.rotation = targetRotation;
-            }
 
             lastFrameRotation = transform.rotation;
         }
 
-        private void SetSmoothEnabled()
+        private void RefreshEnabledSettings()
         {
             smoothEnabled = ModSettings.HudSmoothFollow;
+            snapEnabled = ModSettings.SnapTurning;
+
+            PlayerBodyPosition.Behaviour.OnSnapTurn -= OnSnapTurn;
+
+            if (snapEnabled)
+            {
+                PlayerBodyPosition.Behaviour.OnSnapTurn += OnSnapTurn;
+            }
+        }
+
+        private void OnSnapTurn()
+        {
+            snapTurnedLastFrame = true;
         }
     }
 }
